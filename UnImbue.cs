@@ -7,12 +7,10 @@ namespace UnImbue
 {
     public class UnImbue : LevelModule
     {
-        private static Item targetWep;
-        private SpellCastCharge leftCharge, rightCharge;
+        private static ColliderGroup imbueColliderGroup;
 
         public override IEnumerator OnLoadCoroutine()
         {
-            Debug.Log("(Unimbue) Loaded successfully!");
             new Harmony("OnTriggerImbue").PatchAll();
             return base.OnLoadCoroutine();
         }
@@ -22,13 +20,8 @@ namespace UnImbue
         {
             public static void Postfix(Collider other, bool enter)
             {
-                if (other.gameObject.GetComponentInParent<Item>() != null && other.GetComponentInParent<ColliderGroup>().imbue != null)
-                {
-                    if (enter)
-                        targetWep = other.gameObject.GetComponentInParent<Item>();
-                    else
-                        targetWep = null;
-                }
+                if (other.GetComponentInParent<ColliderGroup>()?.imbue != null)
+                    imbueColliderGroup = enter ? other.GetComponentInParent<ColliderGroup>() : null;
             }
         }
 
@@ -37,51 +30,38 @@ namespace UnImbue
             base.Update();
             if (Player.currentCreature != null)
             {
-                if (!Player.currentCreature.mana.casterLeft.isFiring && !Player.currentCreature.mana.casterRight.isFiring && targetWep != null)
-                    targetWep = null;
+                if (!Player.currentCreature.mana.casterLeft.isFiring && !Player.currentCreature.mana.casterRight.isFiring && imbueColliderGroup != null)
+                    imbueColliderGroup = null;
 
-                // if imbuing && grip pressed w/ no weapon
-                if (targetWep != null &&
-                    ((Player.currentCreature.mana.casterLeft.isFiring && PlayerControl.GetHand(Side.Left).gripPressed && !Player.currentCreature.equipment.GetHeldWeapon(Side.Left)) ||
-                    (Player.currentCreature.mana.casterRight.isFiring && PlayerControl.GetHand(Side.Right).gripPressed && !Player.currentCreature.equipment.GetHeldWeapon(Side.Right))))
-                {
-                    leftCharge = (SpellCastCharge)Player.currentCreature.mana.casterLeft.spellInstance;
-                    rightCharge = (SpellCastCharge)Player.currentCreature.mana.casterRight.spellInstance;
+                if (Player.currentCreature.mana.casterLeft.spellInstance is SpellCastCharge leftCharge)
+                    CheckCharge(leftCharge, Side.Left);
 
-                    if (leftCharge != null && !leftCharge.id.Equals("Telekenesis") && leftCharge.imbueRate > 0 && WeaponContainsID(leftCharge.id))
-                    {
-                        Player.currentCreature.mana.casterLeft.manaWaste = -Player.currentCreature.mana.casterLeft.manaWaste;
-                        leftCharge.imbueRate = -leftCharge.imbueRate;
-                    }
-                    if (rightCharge != null && !rightCharge.id.Equals("Telekenesis") && rightCharge.imbueRate > 0 && WeaponContainsID(rightCharge.id))
-                    {
-                        Player.currentCreature.mana.casterRight.manaWaste = -Player.currentCreature.mana.casterRight.manaWaste;
-                        rightCharge.imbueRate = -rightCharge.imbueRate;
-                    }
-                }
-                // if !imbuing || imbuing && !gripPressed
-                else if (targetWep == null || (leftCharge != null && !PlayerControl.GetHand(Side.Left).gripPressed) || (rightCharge != null && !PlayerControl.GetHand(Side.Right).gripPressed))
-                {
-                    if (leftCharge != null && leftCharge.imbueRate < 0)
-                    {
-                        Player.currentCreature.mana.casterLeft.manaWaste = -Player.currentCreature.mana.casterLeft.manaWaste;
-                        leftCharge.imbueRate = -leftCharge.imbueRate;
-                    }
-                    if (rightCharge != null && rightCharge.imbueRate < 0)
-                    {
-                        Player.currentCreature.mana.casterRight.manaWaste = -Player.currentCreature.mana.casterRight.manaWaste;
-                        rightCharge.imbueRate = -rightCharge.imbueRate;
-                    }
-                }
+                if (Player.currentCreature.mana.casterRight.spellInstance is SpellCastCharge rightCharge)
+                    CheckCharge(rightCharge, Side.Right);
             }
         }
-        private bool WeaponContainsID(string id)
+
+        private void CheckCharge(SpellCastCharge charge, Side side)
         {
-            if (targetWep != null)
-                foreach (Imbue imbue in targetWep.imbues)
-                    if (imbue.spellCastBase != null && imbue.spellCastBase.id.Equals(id))
-                        return true;
-            return false;
+            if (imbueColliderGroup != null
+                && ((side == Side.Left) ? Player.currentCreature.mana.casterLeft.isFiring : Player.currentCreature.mana.casterRight.isFiring)
+                && PlayerControl.GetHand(side).gripPressed
+                && !Player.currentCreature.equipment.GetHeldWeapon(side))
+            {
+                if (charge != null && charge.imbueRate > 0 && charge.id.Equals(imbueColliderGroup.imbue.spellCastBase?.id))
+                {
+                    Player.currentCreature.mana.casterLeft.manaWaste = -Player.currentCreature.mana.casterLeft.manaWaste;
+                    charge.imbueRate = -charge.imbueRate;
+                }
+            }
+            else if (imbueColliderGroup == null || (charge != null && !PlayerControl.GetHand(side).gripPressed))
+            {
+                if (charge != null && charge.imbueRate < 0)
+                {
+                    Player.currentCreature.mana.casterLeft.manaWaste = -Player.currentCreature.mana.casterLeft.manaWaste;
+                    charge.imbueRate = -charge.imbueRate;
+                }
+            }
         }
     }
 }
