@@ -1,26 +1,23 @@
 ﻿using ThunderRoad;
+using HarmonyLib;
+using System;
 
 namespace Unimbue
 {
-    public class UnimbueSpell : SpellCastCharge
-    {
-    }
-
     public class Unimbue : ThunderScript
     {
-        public override void ScriptUpdate()
+        public override void ScriptEnable()
         {
-            base.ScriptUpdate();
+            base.ScriptEnable();
+            new Harmony("Transfer").PatchAll();
+        }
 
-            foreach (Item item in Item.all)
+        [HarmonyPatch(typeof(Imbue), "Transfer", new Type[] { typeof(SpellCastCharge), typeof(float) })]
+        class TransferPatch
+        {
+            public static bool Prefix(Imbue __instance, SpellCastCharge spellCastBase, float energyTransfered)
             {
-                foreach (Imbue imbue in item.imbues)
-                {
-                    if (imbue.spellCastBase != null && imbue.spellCastBase.id.Equals("Unimbue"))
-                    {
-                        imbue.energy = 0;
-                    }
-                }
+                return !(__instance.spellCastBase == null && spellCastBase.id.Equals("Unimbue"));
             }
         }
     }
